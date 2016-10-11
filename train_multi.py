@@ -5,6 +5,7 @@ import numpy as np
 import os
 import time
 import datetime
+from functools import partial
 import data_helpers
 from text_cnn_multi_layer import TextCNNMultiLayer
 from tensorflow.contrib import learn
@@ -13,20 +14,21 @@ from tensorflow.contrib import learn
 # ==================================================
 
 # Model Hyperparameters
-tf.flags.DEFINE_integer("embedding_dim", 48, "Dimensionality of word embedding (default: 48)")
-tf.flags.DEFINE_string("filter_sizes", "3,3,3", "Comma-separated filter sizes per layer (default: '3,3,3')")
-tf.flags.DEFINE_string("num_filters", "64,48,32", "Number of filters per layer (default: '64,48,32')")
+tf.flags.DEFINE_integer("embedding_dim", 64, "Dimensionality of word embedding (default: 64)")
+tf.flags.DEFINE_string("filter_sizes", "5,3", "Comma-separated filter sizes per layer (default: '5,3')")
+tf.flags.DEFINE_string("num_filters", "128,128", "Number of filters per layer (default: '128,128')")
+tf.flags.DEFINE_integer("num_hidden", 128, "Number of hidden units in the fc layer (default: 128)")
 tf.flags.DEFINE_bool("use_non_linearity", True, "Binary flag which specifies whether we use the relu non-linearity "
                                                  "for each conv layer or not (default: True)")
-tf.flags.DEFINE_float("dropout_keep_prob", 0.5, "Dropout keep probability (default: 0.5)")
-tf.flags.DEFINE_float("l2_reg_lambda_embed", 0.01, "L2 regularizaion lambda (default: 0.01)."
+tf.flags.DEFINE_float("dropout_keep_prob", 0.9, "Dropout keep probability for FC layers (default: 0.9)")
+tf.flags.DEFINE_float("l2_reg_lambda_embed", 0.0, "L2 regularizaion lambda (default: 0.0). "
                                               "Acts on the word-embedding look-up table")
-tf.flags.DEFINE_float("l2_reg_lambda_fc", 0.001, "L2 regularizaion lambda (default: 0.001)."
-                                              "Acts on the FC layer weights")
+tf.flags.DEFINE_float("l2_reg_lambda_fc", 0.001, "L2 regularizaion lambda (default: 0.001). "
+                                              "Acts on the FC and sof-max layer weights")
 
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
-tf.flags.DEFINE_integer("num_epochs", 15, "Number of training epochs (default: 25)")
+tf.flags.DEFINE_integer("num_epochs", 30, "Number of training epochs (default: 30)")
 tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
 # Misc Parameters
@@ -48,8 +50,26 @@ print("")
 print("Loading data...")
 x_text, y = data_helpers.load_data_and_labels()
 
+
+# learn representations for sos, eos and zero padding
+def process_line(max_document_length, line):
+    repr = ['<SOS>']
+    words = line.split()
+    repr.extend(words)
+    repr.append('<EOS>')
+    if max_document_length > len(words):
+        repr += ['<PAD>'] * (max_document_length - len(words))
+    return ' '.join(repr)
+
+
+max_document_length = max([len(x.split(" ")) for x in x_text])
+x_text = map(partial(process_line, max_document_length), x_text)
+
 # Build vocabulary
 max_document_length = max([len(x.split(" ")) for x in x_text])
+
+print("Maximum document length is %s" % max_document_length)
+
 vocab_processor = learn.preprocessing.VocabularyProcessor(max_document_length)
 x = np.array(list(vocab_processor.fit_transform(x_text)))
 
@@ -83,6 +103,7 @@ with tf.Graph().as_default():
             embedding_size=FLAGS.embedding_dim,
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=list(map(int, FLAGS.num_filters.split(","))),
+            num_hidden=FLAGS.num_hidden,
             l2_reg_lambda_embed=FLAGS.l2_reg_lambda_embed,
             l2_reg_lambda_fc=FLAGS.l2_reg_lambda_fc,
             use_non_linearity=FLAGS.use_non_linearity
@@ -171,7 +192,7 @@ with tf.Graph().as_default():
 
         # Generate batches
         batches = data_helpers.batch_iter(
-            list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
+            list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs, False)
         # Training loop. For each batch...
         for i, batch in enumerate(batches):
             x_batch, y_batch = zip(*batch)
@@ -181,7 +202,7 @@ with tf.Graph().as_default():
                 print("\nEvaluation:")
                 dev_step(x_dev, y_dev, writer=dev_summary_writer)
                 this_num_epochs = (i + 1.) * FLAGS.batch_size / len(x_train)
-                print("{} epochs Total {}% done".format(str(this_num_epochs),
+                print("{}/{} epochs ({}% done)".format(str(this_num_epochs), FLAGS.num_epochs,
                                                               str(100. * this_num_epochs / FLAGS.num_epochs)))
             if current_step % FLAGS.checkpoint_every == 0:
                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)

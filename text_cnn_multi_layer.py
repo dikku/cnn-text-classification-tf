@@ -5,7 +5,8 @@ import numpy as np
 class TextCNNMultiLayer(object):
     """
     A Deep CNN for text classification.
-    Uses an embedding layer, followed by n convolutional layers, a flat max-pooling layer and a softmax layer.
+    Uses an embedding layer, followed by n convolutional layers, a flat max-pooling layer, a FC layer
+    and a softmax layer.
     Xavier initialization done on weights in all layers
 
         * Extendable to other deep convolutional architectures for intent/sentiment classification
@@ -13,7 +14,7 @@ class TextCNNMultiLayer(object):
     """
     def __init__(
       self, sequence_length, num_classes, vocab_size, embedding_size, filter_sizes,
-            num_filters, use_non_linearity=True, l2_reg_lambda_embed=0.0, l2_reg_lambda_fc=0.0):
+            num_filters, num_hidden, use_non_linearity=True, l2_reg_lambda_embed=0.0, l2_reg_lambda_fc=0.0):
 
         assert len(num_filters) == len(filter_sizes), 'Filter sizes and number of filters must match'
 
@@ -55,10 +56,10 @@ class TextCNNMultiLayer(object):
                     W,
                     strides=[1, 1, 1, 1],
                     padding="VALID",
-                    name="conv"), b)
+                    name="conv-%s" % (i + 1)), b)
                 if use_non_linearity:
                     # Apply nonlinearity if requested
-                    input = tf.nn.relu(conv, name="layer-%s-relu" % (i + 1))
+                    input = tf.nn.relu(conv, name="relu-%s" % (i + 1))
                 else:
                     input = conv
 
@@ -71,22 +72,30 @@ class TextCNNMultiLayer(object):
             name="pool")
 
         self.h_pool_flat = tf.reshape(self.h_pool, [-1, num_filters[-1]])
-        # Add dropout
         with tf.name_scope("dropout"):
             self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_keep_prob)
+        W_fc = tf.get_variable(
+                "W_fc",
+                shape=[num_filters[-1], num_hidden],
+                initializer=tf.contrib.layers.xavier_initializer())
+        b_fc = tf.Variable(tf.constant(0.1, shape=[num_hidden]), name="b_fc")
+        hidden = tf.matmul(self.h_drop, W_fc) + b_fc
+        # Add dropout
+        with tf.name_scope("dropout"):
+            hidden_drop = tf.nn.dropout(hidden, self.dropout_keep_prob)
 
         # Final (unnormalized) scores and predictions
         with tf.name_scope("output"):
-            W = tf.get_variable(
+            W_soft_max = tf.get_variable(
                 "W_soft_max",
-                shape=[num_filters[-1], num_classes],
+                shape=[num_hidden, num_classes],
                 initializer=tf.contrib.layers.xavier_initializer())
-            b = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b_soft_max")
+            b_soft_max = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b_soft_max")
             if l2_reg_lambda_fc:
-                l2_loss += l2_reg_lambda_fc * tf.nn.l2_loss(W)
+                l2_loss += l2_reg_lambda_fc * tf.nn.l2_loss(W_soft_max) + l2_reg_lambda_fc * tf.nn.l2_loss(W_fc)
             if l2_reg_lambda_embed:
                 l2_loss += l2_reg_lambda_embed * tf.nn.l2_loss(W_embed)
-            self.scores = tf.nn.xw_plus_b(self.h_drop, W, b, name="scores")
+            self.scores = tf.nn.xw_plus_b(hidden_drop, W_soft_max, b_soft_max, name="scores")
             self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
         # CalculateMean cross-entropy loss
