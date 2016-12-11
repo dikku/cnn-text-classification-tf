@@ -14,7 +14,8 @@ class TextCNNMultiLayer(object):
     """
     def __init__(
       self, sequence_length, num_classes, vocab_size, embedding_size, filter_sizes,
-            num_filters, num_hidden, use_non_linearity=True, l2_reg_lambda_embed=0.0, l2_reg_lambda_fc=0.0):
+            num_filters, maxpool_sizes, num_hidden, use_non_linearity=True,
+            l2_reg_lambda_embed=0.0, l2_reg_lambda_fc=0.0):
 
         assert len(num_filters) == len(filter_sizes), 'Filter sizes and number of filters must match'
 
@@ -39,10 +40,10 @@ class TextCNNMultiLayer(object):
 
         # Create a convolution + maxpool layer for each filter size
         input = self.embedded_chars_expanded
-        for i, filter_size_num_filter in enumerate(zip(filter_sizes, num_filters)):
+        for i, filter_size_num_filter_maxpool_size in enumerate(zip(filter_sizes, num_filters, maxpool_sizes)):
             with tf.name_scope("layer-%s-conv" % (i+1)):
                 # Convolution Layer i
-                filter_size, num_filter = filter_size_num_filter
+                filter_size, num_filter, maxpool_size = filter_size_num_filter_maxpool_size
                 input_shape = input.get_shape().as_list()
                 filter_shape = [filter_size, input_shape[2], input_shape[3], num_filter]
                 if i == 0:
@@ -59,7 +60,14 @@ class TextCNNMultiLayer(object):
                     name="conv-%s" % (i + 1)), b)
                 if use_non_linearity:
                     # Apply nonlinearity if requested
-                    input = tf.nn.relu(conv, name="relu-%s" % (i + 1))
+                    conv = tf.nn.relu(conv, name="relu-%s" % (i + 1))
+                if maxpool_size > 1:
+                    input = tf.nn.max_pool(
+                        conv,
+                        ksize=[1, maxpool_size, 1, 1],
+                        strides=[1, maxpool_size, 1, 1],
+                        padding='VALID',
+                        name="pool-%s" % (i + 1))
                 else:
                     input = conv
 

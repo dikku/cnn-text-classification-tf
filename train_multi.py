@@ -15,18 +15,20 @@ from tensorflow.contrib import learn
 # Data loading params
 tf.flags.DEFINE_float("dev_sample_percentage", .1, "Percentage of the training data to use for validation")
 tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
-tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the positive data.")
+tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
 
 
 # Model Hyperparameters
-tf.flags.DEFINE_integer("embedding_dim", 64, "Dimensionality of word embedding (default: 64)")
-tf.flags.DEFINE_string("filter_sizes", "5,3", "Comma-separated filter sizes per layer (default: '5,3')")
-tf.flags.DEFINE_string("num_filters", "128,128", "Number of filters per layer (default: '128,128')")
-tf.flags.DEFINE_integer("num_hidden", 128, "Number of hidden units in the fc layer (default: 128)")
+tf.flags.DEFINE_integer("embedding_dim", 48, "Dimensionality of word embedding (default: 48)")
+tf.flags.DEFINE_string("filter_sizes", "3,3,3", "Comma-separated filter sizes per layer (default: '3,3,3')")
+tf.flags.DEFINE_string("num_filters", "64,64,64", "Number of filters per layer (default: '64,64,64')")
+tf.flags.DEFINE_string("maxpool_sizes", "1,5,1", "Size of local max pooling per layer. "
+                            "Local stride size is also equal to this paramater (default: '1,5,1')")
+tf.flags.DEFINE_integer("num_hidden", 64, "Number of hidden units in the fc layer (default: 64)")
 tf.flags.DEFINE_bool("use_non_linearity", True, "Binary flag which specifies whether we use the relu non-linearity "
                                                  "for each conv layer or not (default: True)")
 tf.flags.DEFINE_float("dropout_keep_prob", 0.9, "Dropout keep probability for FC layers (default: 0.9)")
-tf.flags.DEFINE_float("l2_reg_lambda_embed", 0.0, "L2 regularizaion lambda (default: 0.0). "
+tf.flags.DEFINE_float("l2_reg_lambda_embed", 0.001, "L2 regularizaion lambda (default: 0.001). "
                                               "Acts on the word-embedding look-up table")
 tf.flags.DEFINE_float("l2_reg_lambda_fc", 0.001, "L2 regularizaion lambda (default: 0.001). "
                                               "Acts on the FC and sof-max layer weights")
@@ -109,6 +111,7 @@ with tf.Graph().as_default():
             embedding_size=FLAGS.embedding_dim,
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=list(map(int, FLAGS.num_filters.split(","))),
+            maxpool_sizes=list(map(int, FLAGS.maxpool_sizes.split(","))),
             num_hidden=FLAGS.num_hidden,
             l2_reg_lambda_embed=FLAGS.l2_reg_lambda_embed,
             l2_reg_lambda_fc=FLAGS.l2_reg_lambda_fc,
