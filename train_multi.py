@@ -22,15 +22,15 @@ tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity
 tf.flags.DEFINE_integer("embedding_dim", 48, "Dimensionality of word embedding (default: 48)")
 tf.flags.DEFINE_string("filter_sizes", "3,3,3", "Comma-separated filter sizes per layer (default: '3,3,3')")
 tf.flags.DEFINE_string("num_filters", "64,64,64", "Number of filters per layer (default: '64,64,64')")
-tf.flags.DEFINE_string("maxpool_sizes", "1,5,1", "Size of local max pooling per layer. "
-                            "Local stride size is also equal to this paramater (default: '1,5,1')")
+tf.flags.DEFINE_string("maxpool_sizes", "3,4,1", "Size of local max pooling per layer. "
+                            "Local stride size is also equal to this paramater (default: '3,4,1')")
 tf.flags.DEFINE_integer("num_hidden", 64, "Number of hidden units in the fc layer (default: 64)")
 tf.flags.DEFINE_bool("use_non_linearity", True, "Binary flag which specifies whether we use the relu non-linearity "
                                                  "for each conv layer or not (default: True)")
 tf.flags.DEFINE_float("dropout_keep_prob", 0.9, "Dropout keep probability for FC layers (default: 0.9)")
-tf.flags.DEFINE_float("l2_reg_lambda_embed", 0.001, "L2 regularizaion lambda (default: 0.001). "
+tf.flags.DEFINE_float("l2_reg_lambda_embed", 0.1, "L2 regularizaion lambda (default: 0.1). "
                                               "Acts on the word-embedding look-up table")
-tf.flags.DEFINE_float("l2_reg_lambda_fc", 0.001, "L2 regularizaion lambda (default: 0.001). "
+tf.flags.DEFINE_float("l2_reg_lambda_fc", 0.1, "L2 regularizaion lambda (default: 0.1). "
                                               "Acts on the FC and sof-max layer weights")
 
 # Training parameters
@@ -209,7 +209,10 @@ with tf.Graph().as_default():
             current_step = tf.train.global_step(sess, global_step)
             if current_step % FLAGS.evaluate_every == 0:
                 print("\nEvaluation:")
+                print("Dev")
                 dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                print("Train")
+                dev_step(x_batch, y_batch, writer=dev_summary_writer)
                 this_num_epochs = (i + 1.) * FLAGS.batch_size / len(x_train)
                 print("{}/{} epochs ({}% done)".format(str(this_num_epochs), FLAGS.num_epochs,
                                                               str(100. * this_num_epochs / FLAGS.num_epochs)))
